@@ -10,6 +10,10 @@ import (
     "io"
 
     "github.com/palourde/logger"
+//    "monniapi"
+    "github.com/ransoni/monniapi/monniapi"
+    "flag"
+//    "github.com/bencaron/gosensu"
 )
 
 var (
@@ -18,7 +22,13 @@ var (
     creator_name    string
     company_email   string
     company_phone   string
+    pubConfig *monniapi.Config
+    debug           bool = false
 )
+
+//type pubConfig struct {
+//    Sensu   []sen
+//}
 
 
 //func deleteStashHandler(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +64,14 @@ var (
 //    }
 //}
 //
+
+func index(w http.ResponseWriter, r *http.Request) {
+    page := "<!DOCTYPE html><html><body><h1>Monni API</h1><p><a href=\"/getCompany\">getCompany</a></p><p><a href=\"/getClients\">getClients</a></p></body></html>"
+    io.WriteString(w, page)
+    //    if err := io.WriteString(w, "Hello World!"); err != nil {
+    //        http.Error(w, fmt.Sprintf("Cannot encode response data: %v", err), http.StatusInternalServerError)
+    //    }
+}
 
 func getCompanyHandler(w http.ResponseWriter, r *http.Request) {
     encoder := json.NewEncoder(w)
@@ -133,12 +151,15 @@ func getCompanyHandler(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-func index(w http.ResponseWriter, r *http.Request) {
-    page := "<!DOCTYPE html><html><body><h1>Monni API</h1><p><a href=\"/getCompany\">getCompany</a></p></body></html>"
-    io.WriteString(w, page)
-//    if err := io.WriteString(w, "Hello World!"); err != nil {
-//        http.Error(w, fmt.Sprintf("Cannot encode response data: %v", err), http.StatusInternalServerError)
-//    }
+func getClientsHandler(w http.ResponseWriter, r *http.Request) {
+    encoder := json.NewEncoder(w)
+    clients := monniapi.GetClients()
+
+    logger.Infof("Got results for Tenants: %s", clients)
+
+    if err := encoder.Encode(clients); err != nil {
+        http.Error(w, fmt.Sprintf("Cannot encode response data: %v", err), http.StatusInternalServerError)
+    }
 }
 
 func addCompany(w http.ResponseWriter, r *http.Request) {
@@ -290,12 +311,34 @@ func deleteCompany(w http.ResponseWriter, r *http.Request) {
 
 // WebServer starts the web server and serves GET & POST requests
 func main() {
+    var confErr error
+    confFile := flag.String("c", "./config.json", "relative or full path to configuration file")
+    pubConfig, confErr = monniapi.LoadConfig(*confFile)
+    if confErr != nil {
+        logger.Fatal(confErr)
+    }
+
+    if debug {
+        for i := 0; i < len(pubConfig.Sensu); i++ {
+            fmt.Printf("Name: %s\nURL: %s\nUser: %s\nPass: %s\n", pubConfig.Sensu[i].Name, pubConfig.Sensu[i].URL, pubConfig.Sensu[i].User, pubConfig.Sensu[i].Pass)
+            //        pubConfig.Sensu[i]
+        }
+    }
+
+//    sensu.Sensu.GetClients()
+
+
+//    monniapi.New(config)
+
+
+    // THIS PART BELOW SHOULD BE MOVED TO WEBSERVER FUNCTION, OR SO...
     http.Handle("/", http.HandlerFunc(index))
     http.Handle("/getCompany", http.HandlerFunc(getCompanyHandler))
+    http.Handle("/getClients", http.HandlerFunc(getClientsHandler))
     http.Handle("/addCompany/", http.HandlerFunc(addCompany))
     http.Handle("/deleteCompany/", http.HandlerFunc(deleteCompany))
 
-    listen := fmt.Sprintf("%s:%d", "0.0.0.0", 8080)
+    listen := fmt.Sprintf("%s:%d", "0.0.0.0", 8088)
     logger.Infof("Monni API is now listening on %s", listen)
     err := http.ListenAndServe(listen, nil)
     if err != nil {
